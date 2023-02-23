@@ -13,12 +13,12 @@ vars:
   # option. The ideal value must be tuned per dataset and the acceptable
   # loss of accuracy.
   max_mse_qloss: 3e-6
-  gpu: 0
+  gpu: -1
   # Can either be 'layer-weighting' or 'no-layer-weighting'. The former
   # only uses the outputs of the last transformer layer in downstream
   # components, while the latter will learn task-specific, weighted
   # representations of all transformer layers for downstream usage.
-  config_name: "no-layer-weighting"
+  config_name: "layer-weighting"
 
 directories: ["configs", "assets", "corpus", "training"]
 
