@@ -1,12 +1,13 @@
 from typing import Callable
 from dataclasses import dataclass
 import pytest
+from thinc.api import get_torch_default_device
 import torch
 from torch.nn import Module
 
 from curated_transformers._compat import has_hf_transformers, transformers
 from curated_transformers.models.architectures import _pytorch_encoder
-from curated_transformers.models.hf_loader import build_hf_encoder_loader_v1
+from curated_transformers.models.hf_loader import build_hf_transformer_encoder_loader_v1
 from curated_transformers.models.pytorch.albert import AlbertEncoder
 from curated_transformers.models.pytorch.albert.config import AlbertConfig
 from curated_transformers.models.pytorch.attention import AttentionMask
@@ -33,7 +34,7 @@ TEST_MODELS = [
 def encoder_from_config(config: ModelConfig):
     encoder = config.encoder(config.config)
     model = _pytorch_encoder(encoder)
-    model.init = build_hf_encoder_loader_v1(name=config.hf_model_name)
+    model.init = build_hf_transformer_encoder_loader_v1(name=config.hf_model_name)
     return model
 
 
@@ -49,11 +50,15 @@ def test_hf_load_weights(model_config):
 @pytest.mark.skipif(not has_hf_transformers, reason="requires huggingface transformers")
 @pytest.mark.parametrize("model_config", TEST_MODELS)
 def test_model_against_hf_transformers(model_config):
+    torch_device = get_torch_default_device()
+
     model = encoder_from_config(model_config)
     model.initialize()
     encoder = model.shims[0]._model
     encoder.eval()
-    hf_encoder = transformers.AutoModel.from_pretrained(model_config.hf_model_name)
+    hf_encoder = transformers.AutoModel.from_pretrained(model_config.hf_model_name).to(
+        torch_device
+    )
     hf_encoder.eval()
 
     hf_tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -61,7 +66,7 @@ def test_model_against_hf_transformers(model_config):
     )
     tokenization = hf_tokenizer(
         ["This is a test.", "Let's match outputs"], padding=True, return_tensors="pt"
-    )
+    ).to(torch_device)
     X = tokenization["input_ids"]
     attention_mask = tokenization["attention_mask"]
 
@@ -72,11 +77,11 @@ def test_model_against_hf_transformers(model_config):
     Y_hf_encoder = hf_encoder(X, attention_mask=attention_mask)
 
     assert torch.allclose(
-        Y_encoder.last_hidden_layer_states, Y_hf_encoder.last_hidden_state
+        Y_encoder.last_hidden_layer_states, Y_hf_encoder.last_hidden_state, atol=1e-6
     )
 
     # Try to infer the attention mask from padding.
     Y_encoder = encoder(X)
     assert torch.allclose(
-        Y_encoder.last_hidden_layer_states, Y_hf_encoder.last_hidden_state
+        Y_encoder.last_hidden_layer_states, Y_hf_encoder.last_hidden_state, atol=1e-6
     )

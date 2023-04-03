@@ -16,11 +16,17 @@ from curated_transformers.models.architectures import (
     build_bert_transformer_model_v1,
     build_roberta_transformer_model_v1,
 )
-from curated_transformers.models.hf_loader import build_hf_encoder_loader_v1
+from curated_transformers.models.hf_loader import build_hf_transformer_encoder_loader_v1
 from curated_transformers.models.with_strided_spans import (
     build_with_strided_spans_v1,
 )
-from curated_transformers.tokenization.hf_loader import build_hf_piece_encoder_loader_v1
+from curated_transformers.tokenization import (
+    build_bert_wordpiece_encoder_v1,
+    build_byte_bpe_encoder_v1,
+    build_camembert_sentencepiece_encoder_v1,
+    build_hf_piece_encoder_loader_v1,
+    build_xlmr_sentencepiece_encoder_v1,
+)
 from curated_transformers.pipeline.transformer import make_transformer
 from curated_transformers.util import create_gradual_transformer_unfreezing
 from curated_transformers._compat import has_hf_transformers, transformers
@@ -56,9 +62,8 @@ cfg_string_last_layer_listener = """
     vocab_size = 28996
     num_hidden_layers = 1
     hidden_width = 60
-
-    [components.transformer.model.with_spans]
-    @architectures = "curated-transformers.WithStridedSpans.v1"
+    piece_encoder = {"@architectures":"curated-transformers.BertWordpieceEncoder.v1"}
+    with_spans = {"@architectures":"curated-transformers.WithStridedSpans.v1"}
 
     [initialize]
 
@@ -105,9 +110,8 @@ cfg_string_scalar_weighting_layer_listener = """
     vocab_size = 28996
     num_hidden_layers = 1
     hidden_width = 60
-
-    [components.transformer.model.with_spans]
-    @architectures = "curated-transformers.WithStridedSpans.v1"
+    piece_encoder = {"@architectures":"curated-transformers.BertWordpieceEncoder.v1"}
+    with_spans = {"@architectures":"curated-transformers.WithStridedSpans.v1"}
 
     [initialize]
 
@@ -156,6 +160,11 @@ def evaluate_tagger_on_train_data(model):
     docs = list(model.pipe(["Eat blue ham", "I like green eggs"]))
     assert [t.tag_ for t in docs[0]] == ["V", "J", "N"]
     assert [t.tag_ for t in docs[1]] == ["N", "V", "J", "N"]
+
+
+def test_default_pipe_config_can_be_constructed():
+    nlp = spacy.blank("en")
+    nlp.add_pipe("curated_transformer", config={"model": {"vocab_size": 32}})
 
 
 @pytest.mark.slow
@@ -215,10 +224,11 @@ def _hf_tokenize_per_token(tokenizer, docs, *, roberta=False):
 def test_bert_transformer_pipe_against_hf():
     nlp = spacy.blank("en")
     model = build_bert_transformer_model_v1(
+        piece_encoder=build_bert_wordpiece_encoder_v1(),
         with_spans=build_with_strided_spans_v1(),
         vocab_size=28996,
     )
-    model.get_ref("transformer").init = build_hf_encoder_loader_v1(
+    model.get_ref("transformer").init = build_hf_transformer_encoder_loader_v1(
         name="bert-base-cased"
     )
     model.get_ref("piece_encoder").init = build_hf_piece_encoder_loader_v1(
@@ -253,10 +263,11 @@ def test_bert_transformer_pipe_against_hf():
 def test_camembert_transformer_pipe_against_hf():
     nlp = spacy.blank("fr")
     model = build_camembert_transformer_model_v1(
+        piece_encoder=build_camembert_sentencepiece_encoder_v1(),
         with_spans=build_with_strided_spans_v1(),
         vocab_size=32005,
     )
-    model.get_ref("transformer").init = build_hf_encoder_loader_v1(
+    model.get_ref("transformer").init = build_hf_transformer_encoder_loader_v1(
         name="camembert-base"
     )
     model.get_ref("piece_encoder").init = build_hf_piece_encoder_loader_v1(
@@ -291,10 +302,13 @@ def test_camembert_transformer_pipe_against_hf():
 def test_roberta_transformer_pipe_against_hf():
     nlp = spacy.blank("en")
     model = build_roberta_transformer_model_v1(
+        piece_encoder=build_byte_bpe_encoder_v1(),
         with_spans=build_with_strided_spans_v1(),
         vocab_size=50265,
     )
-    model.get_ref("transformer").init = build_hf_encoder_loader_v1(name="roberta-base")
+    model.get_ref("transformer").init = build_hf_transformer_encoder_loader_v1(
+        name="roberta-base"
+    )
     model.get_ref("piece_encoder").init = build_hf_piece_encoder_loader_v1(
         name="roberta-base"
     )
@@ -329,10 +343,11 @@ def test_roberta_transformer_pipe_against_hf():
 def test_xlmr_transformer_pipe_against_hf():
     nlp = spacy.blank("en")
     model = build_xlmr_transformer_model_v1(
+        piece_encoder=build_xlmr_sentencepiece_encoder_v1(),
         with_spans=build_with_strided_spans_v1(),
         vocab_size=250002,
     )
-    model.get_ref("transformer").init = build_hf_encoder_loader_v1(
+    model.get_ref("transformer").init = build_hf_transformer_encoder_loader_v1(
         name="xlm-roberta-base"
     )
     model.get_ref("piece_encoder").init = build_hf_piece_encoder_loader_v1(
@@ -404,10 +419,11 @@ def test_frozen_transformer_pipe():
 def test_transformer_pipe_outputs():
     nlp = spacy.blank("en")
     model = build_xlmr_transformer_model_v1(
+        piece_encoder=build_xlmr_sentencepiece_encoder_v1(),
         with_spans=build_with_strided_spans_v1(),
         vocab_size=250002,
     )
-    model.get_ref("transformer").init = build_hf_encoder_loader_v1(
+    model.get_ref("transformer").init = build_hf_transformer_encoder_loader_v1(
         name="xlm-roberta-base"
     )
     model.get_ref("piece_encoder").init = build_hf_piece_encoder_loader_v1(
